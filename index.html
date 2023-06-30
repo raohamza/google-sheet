@@ -1,0 +1,362 @@
+
+
+<html>
+<head>
+  <style type="text/css">
+    table, th, td {
+  border: 1px solid black;
+}
+table.center {
+  margin-left: auto;
+  margin-right: auto;
+}
+  </style>
+</head>
+  <body>
+
+    <pre id="content" style="white-space: pre-wrap;"></pre>
+    <h1>Filters</h1>
+    <!-- <form> -->
+      <label for="account">Account</label><br>
+      <input type="text" id="account" name="account" value="TRAN01" disabled><br><br>
+      <label for="year">Year</label><br>
+      <input type="text" id="year" name="year"><br><br>
+      <label for="month">Month</label><br>
+      <select id="month" name="month">
+      <option value='' selected>--Select Month--</option>
+        <option value='1'>Janaury</option>
+        <option value='2'>February</option>
+        <option value='3'>March</option>
+        <option value='4'>April</option>
+        <option value='5'>May</option>
+        <option value='6'>June</option>
+        <option value='7'>July</option>
+        <option value='8'>August</option>
+        <option value='9'>September</option>
+        <option value='10'>October</option>
+        <option value='11'>November</option>
+        <option value='12'>December</option>
+      </select>
+      <br><br>
+      <label for="snumber">Serial Number</label><br>
+      <input type="text" id="snumber" name="snumber"><br><br>
+      <input type="submit" style="display: none;" id="submit" value="Submit" onclick="submit()">
+      <div style="color: red" id="loaing">Loading...</div>
+
+
+    <span style="font-size: 22px; font-weight: 500;">Device Contract Transactions</span>
+      <input type="button" style="display: none;" id="export" value="Export" onclick="exportData()">
+    <div style="margin: 10px;">
+      <table>
+        <thead>
+          <tr>
+            <!-- <th>Account No.</th> -->
+            <th>Assigned Purchase Order No</th>
+            <th>serialNo.</th>
+            <th>valueLocal</th>
+            <th>valueUsd</th>
+            <th>currencyCode</th>
+            <th>quantity</th>
+            <th>ratePlanName</th>
+            <th>userContact</th>
+            <!-- <th>simCardNo</th>
+            <th>periodFrom</th>
+            <th>periodTo</th>
+            <th>quantityFraction</th>
+            <th>reference</th>
+            <th>startDate</th>
+            <th>endDate</th> -->
+          </tr>
+        </thead>
+        <tbody id="deviceList">
+          
+        </tbody>
+      </table>
+    </div>
+    <!-- </form>  -->
+    <script type="text/javascript" src="myAdminApi.js"></script> 
+
+
+    <script type="text/javascript"> 
+
+      // Client ID and API key from the Developer Console 
+      var CLIENT_ID = 'CLIENT_ID';  // Client's CLIENT_ID 
+      var API_KEY = 'AAPI_KEY';   // Client's API_KEY
+      const spreadSheetId = 'spreadSheetId'     // Client's spreadSheetId
+      // Array of API discovery doc URLs for APIs used by the quickstart
+      var DISCOVERY_DOCS = ["https://sheets.googleapis.com/$discovery/rest?version=v4"];
+
+      // Authorization scopes required by the API; multiple scopes can be
+      // included, separated by spaces.
+      var SCOPES = "https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid https://www.googleapis.com/auth/spreadsheets";
+      var data = [];
+      var client = null, googleSheet=null, auth=null;
+
+      var apiKey,
+        sessionId,
+        loading,
+        logonParams = {
+          username: 'username',
+          password: 'password'
+      };
+      let loadingText = document.getElementById("loaing");
+      let submitBtn = document.getElementById("submit");
+      let exportBtn = document.getElementById("export");
+
+
+      /**
+       *  On load, called to load the auth2 library and API client library.
+       */
+      function handleClientLoad() {
+        gapi.load('client:auth2', initClient);
+      }
+
+      /**
+       *  Initializes the API client library and sets up sign-in state
+       *  listeners.
+       */
+      async function initClient() {
+        console.log('called')
+        console.log(gapi)
+      
+
+        gapi.client.init({
+          // keyFile: 'credentails.json',
+          apiKey: API_KEY,
+          clientId: CLIENT_ID,
+          discoveryDocs: DISCOVERY_DOCS,
+          scope: SCOPES
+        }).then(function () {
+          console.log('innnnn')
+          // Listen for sign-in state changes.
+          gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
+
+          // Handle the initial sign-in state.
+          updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+
+          // signoutButton.onclick = handleSignoutClick;
+        }, function(error) {
+          console.log('out')
+          appendPre(JSON.stringify(error, null, 2));
+        });
+      }
+
+      /**
+       *  Called when the signed in status changes, to update the UI
+       *  appropriately. After a sign-in, the API is called.
+       */
+      function updateSigninStatus(isSignedIn) {
+        if (isSignedIn) {
+          console.log('is signed in')
+          // authorizeButton.style.display = 'none';
+          // signoutButton.style.display = 'block';
+        } else {
+          handleAuthClick();
+          // authorizeButton.style.display = 'block';
+          // signoutButton.style.display = 'none';
+        }
+      }
+
+      /**
+       *  Sign in the user upon button click.
+       */
+      function handleAuthClick(event) {
+        gapi.auth2.getAuthInstance().signIn();
+      }
+
+
+      /**
+       * Append a pre element to the body containing the given message
+       * as its text node. Used to display the results of the API call.
+       *
+       * @param {string} message Text to be placed in pre element.
+       */
+      function appendPre(message) {
+        var pre = document.getElementById('content');
+        var textContent = document.createTextNode(message + '\n');
+        pre.appendChild(textContent);
+      }
+
+      myAdminApi().call('Authenticate', logonParams, function(user) {
+        apiKey = user.userId;
+        sessionId = user.sessionId; 
+        loadingText.style.display = "none"
+        submitBtn.style.display = "block"
+        
+      }, function(errorMessage, error){
+        var errorIdx, alertMsg = 'Error Message: ' + errorMessage;
+        if (error && error.errors) {
+          alertMsg += '\n\nThe following errors occurred:\n';
+          for (errorIdx in error.errors) {
+            alertMsg += error.errors[errorIdx].name + '\n';
+          }
+        }
+        alert(alertMsg);
+      });
+
+      async function exportData () {
+        console.log('called export')
+
+        if (data.length) {
+          console.log(data)
+          const keys = []
+          const rows = [];
+            let hObj = {
+              values: []
+            }
+          for (let key in data[0]) {
+            keys.push(key.toString());
+            hObj.values.push({
+              userEnteredValue: {
+                stringValue: key.toString()
+              },
+
+            userEnteredFormat: {
+              "backgroundColor": {
+              "red": 0.0,
+              "green": 0.0,
+              "blue": 0.0
+            },
+            "horizontalAlignment" : "CENTER",
+            "textFormat": {
+              "foregroundColor": {
+                "red": 1.0,
+                "green": 1.0,
+                "blue": 1.0
+              },
+              "fontSize": 12,
+              "bold": true
+            }
+            }
+          })
+          }
+          rows.push(hObj)
+          for (let row of data) {
+            let robj = {
+              values: []
+            }
+            for (let key of keys) {
+              let value = null
+              if (key === 'region') {
+                value = row[key].name || 'N/A'
+              } else {
+                value = row[key] || 'N/A'
+              }
+              robj.values.push({
+                userEnteredValue: {
+                  stringValue: value.toString()
+                }
+              })    
+            }
+            rows.push(robj)
+          }
+          console.log('rows', rows)
+
+
+          console.log(gapi.client.getToken)
+          gapi.client.sheets.spreadsheets.batchUpdate({
+            spreadsheetId: spreadSheetId},{
+            requests: [{
+              updateCells: {
+                rows: rows,
+                fields: 'userEnteredValue.stringValue,userEnteredFormat.backgroundColor,userEnteredFormat.horizontalAlignment,userEnteredFormat.textFormat',
+                start: {
+                  sheetId: 0,
+                  rowIndex: 0,
+                  columnIndex: 0
+                }
+              }
+            }],
+            "includeSpreadsheetInResponse": true,
+            "responseRanges": [
+              `Sheet1!A1:B1`
+            ],
+            "responseIncludeGridData": true
+          }).then(function(response) {
+            console.log('response', response)
+            alert('Data has been exported successfully!!')
+          }, function(response) {
+            appendPre('Error: ' + response.result.error.message);
+          });
+
+        } else {
+          Alert('No data to update!')
+        }
+      }
+
+      function submit () {
+
+        console.log('called');
+        const account = document.getElementById("account").value;
+        const year = parseInt(document.getElementById("year").value);
+        const month = parseInt(document.getElementById("month").value);
+        const snumber = document.getElementById("snumber").value;
+
+        if (!year || isNaN(year)) {
+          return alert('Please enter year');
+        }
+        if (!month || isNaN(month)) {
+          return alert('Please select month')
+        }
+
+
+        let deviceIdx;
+         let   listHtml = '';
+        const deviceList = document.getElementById('deviceList');
+        let deviceParams = {
+              apiKey: apiKey,
+              sessionId: sessionId,
+              forAccount: account,
+              monthFilter: month,
+              yearFilter: year
+            };
+            if (snumber) {
+              deviceParams.serialNoFilter = snumber
+            }
+console.log('calling')
+        loadingText.style.display = "block"
+        submitBtn.style.display = "none"
+
+        myAdminApi().call('GetDeviceContractTransactions', deviceParams, function(devices) {
+          console.log('asdasd')
+          console.log('devices ',devices)
+          data = devices
+          if (devices && devices.length) {
+            exportBtn.style.display = "inline-block"
+          }
+          for (deviceIdx in devices) {
+            listHtml += '<tr>'
+            console.log(devices[deviceIdx])
+            // listHtml += '<td>' + devices[deviceIdx].accountNo + '</td>';
+            listHtml += '<td>' + devices[deviceIdx].assignedPurchaseOrderNo + '</td>';
+            listHtml += '<td>' + devices[deviceIdx].serialNo + '</td>';
+            listHtml += '<td>' + devices[deviceIdx].valueLocal + '</td>';
+            listHtml += '<td>' + devices[deviceIdx].valueUsd + '</td>';
+            listHtml += '<td>' + devices[deviceIdx].currencyCode + '</td>';
+            listHtml += '<td>' + devices[deviceIdx].quantity + '</td>';
+            listHtml += '<td>' + devices[deviceIdx].ratePlanName + '</td>';
+            listHtml += '<td>' + devices[deviceIdx].userContact + '</td>';
+            // listHtml += '<td>' + devices[deviceIdx].simCardNo + '</td>';
+            // listHtml += '<td>' + devices[deviceIdx].periodFrom + '</td>';
+            // listHtml += '<td>' + devices[deviceIdx].periodTo + '</td>';
+            // listHtml += '<td>' + devices[deviceIdx].quantityFraction + '</td>';
+            // listHtml += '<td>' + devices[deviceIdx].reference + '</td>';
+            // listHtml += '<td>' + devices[deviceIdx].startDate + '</td>';
+            // listHtml += '<td>' + devices[deviceIdx].endDate + '</td>';
+            listHtml += '</tr>'
+          }
+        loadingText.style.display = "none"
+        submitBtn.style.display = "block"
+        
+          deviceList.innerHTML = listHtml;
+        });
+      }
+
+
+    </script>
+    <script async defer src="https://apis.google.com/js/api.js"
+      onload="this.onload=function(){};handleClientLoad()"
+      onreadystatechange="if (this.readyState === 'complete') this.onload()">
+    </script>
+  </body>
+</html>
